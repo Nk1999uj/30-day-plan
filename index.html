@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive 30-Day Study Plan</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Chosen Palette: Warm Neutrals (Stone, Indigo) -->
+    <!-- Application Structure Plan: A dashboard-style SPA featuring a primary visualization (donut chart for topic distribution) and an interactive 30-day grid layout. This structure was chosen to provide a high-level overview at a glance, while allowing users to drill down into daily details via modals. Filters for specific technologies are included to help users focus on particular subjects, making the dense plan more manageable and personalized to their revision needs. -->
+    <!-- Visualization & Content Choices: Report Info: Study time allocation per subject. -> Goal: Inform about topic balance. -> Viz: Donut Chart -> Interaction: Hover for details. -> Justification: Quickly shows the proportion of time dedicated to each technology, helping the user understand the plan's focus. -> Library: Chart.js/Canvas. | Report Info: Daily schedule. -> Goal: Organize & Inform. -> Viz: Interactive Day Cards in a Grid. -> Interaction: Click card to open a modal with detailed schedule; Filter buttons to highlight relevant days. -> Justification: The grid provides a familiar calendar-like overview, while modals prevent cluttering the main view with too much information at once. Filters enable a goal-oriented exploration of the plan. -> Library/Method: HTML/CSS/Tailwind + JS. -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .chart-container {
+            position: relative;
+            margin: auto;
+            height: 320px;
+            width: 100%;
+            max-width: 320px;
+        }
+        .day-card {
+            transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out, opacity 0.3s ease-in-out;
+        }
+        .day-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+        }
+        .filtered-out {
+            opacity: 0.2;
+            pointer-events: none;
+        }
+        .highlight {
+            border-color: #4f46e5;
+            box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.4);
+        }
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+    </style>
+</head>
+<body class="bg-stone-100 text-stone-800">
+
+    <header class="bg-white shadow-sm sticky top-0 z-20">
+        <div class="container mx-auto px-6 py-4">
+            <h1 class="text-2xl md:text-3xl font-bold text-indigo-600">30-Day Full-Stack Developer Plan</h1>
+            <p class="text-stone-600 mt-1">An interactive guide to your intensive study schedule.</p>
+        </div>
+    </header>
+
+    <main class="container mx-auto p-4 md:p-6">
+        
+        <section id="overview" class="mb-8 bg-white p-6 rounded-lg shadow-md">
+            <h2 class="text-xl font-bold mb-4 text-center">Plan Overview</h2>
+            <div class="flex flex-col md:flex-row items-center gap-8">
+                <div class="w-full md:w-1/2">
+                    <h3 class="text-lg font-semibold text-stone-700 mb-2">Welcome to Your Study Dashboard</h3>
+                    <p class="text-stone-600 mb-4">
+                        This is your interactive guide for the next 30 days of intensive learning. The goal is to consolidate your existing knowledge and build a strong foundation in new technologies. This dashboard helps you visualize the plan, focus on specific topics, and track your daily tasks.
+                    </p>
+                    <p class="text-stone-600">
+                        Use the chart to see how your time is allocated, and click the filters below to highlight days related to a specific technology. Click any day card to see the detailed schedule. Good luck!
+                    </p>
+                </div>
+                <div class="w-full md:w-1/2">
+                    <h3 class="text-lg font-semibold text-stone-700 mb-2 text-center">Topic Hours Distribution</h3>
+                    <div class="chart-container">
+                        <canvas id="topicDistributionChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="filters" class="mb-6 bg-white p-4 rounded-lg shadow-md sticky top-[88px] z-10">
+             <h3 class="text-lg font-semibold text-stone-700 mb-3 text-center md:text-left">Filter by Technology</h3>
+            <div id="filter-buttons" class="flex flex-wrap justify-center gap-2">
+            </div>
+        </section>
+
+        <div id="plan-container">
+        </div>
+
+    </main>
+    
+    <div id="day-modal" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden flex justify-center items-center p-4">
+        <div id="modal-content" class="bg-white rounded-lg shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <div class="p-6 border-b border-stone-200 sticky top-0 bg-white z-10">
+                <div class="flex justify-between items-center">
+                    <div>
+                        <h2 id="modal-day-number" class="text-xl font-bold text-indigo-600">Day X</h2>
+                        <p id="modal-day-title" class="text-stone-600 font-medium">Topic Focus</p>
+                    </div>
+                    <button id="modal-close-btn" class="text-stone-500 hover:text-stone-800 text-3xl font-bold">&times;</button>
+                </div>
+            </div>
+            <div id="modal-day-schedule" class="p-6">
+            </div>
+        </div>
+    </div>
+    
+    <footer class="text-center p-6 text-stone-500">
+        <p>Built to help you succeed. Stay focused and consistent!</p>
+    </footer>
+
+    <script>
+        const studyPlanData = [
+            { day: 1, phase: 1, title: "HTML/CSS + Core Java Basics", tags: ["HTML", "CSS", "Java", "DSA"], schedule: [ { block: "Morning (4 hrs)", task: "HTML5 structure, semantic tags, forms, tables, media. CSS selectors, box model, display properties, basic layout. Activity: Recreate a simple static webpage layout." }, { block: "Mid-day (4 hrs)", task: "Core Java: Data types, variables, operators, control flow (if/else, loops), arrays. Activity: Solve basic coding challenges (e.g., FizzBuzz, prime number check)." }, { block: "Evening (3 hrs)", task: "HTML/CSS: Flexbox basics. Core Java: Methods, recursion. Activity: Implement a responsive header/footer using Flexbox." }, { block: "DSA Revision (1 hr)", task: "DSA: Arrays & Strings (Basics) - Concepts and simple problems." } ] },
+            { day: 2, phase: 1, title: "Advanced CSS + OOP + SQL", tags: ["HTML", "CSS", "Java", "SQL", "DSA"], schedule: [ { block: "Morning (4 hrs)", task: "HTML/CSS: Grid layout, responsive design principles (media queries), transitions, animations. Activity: Build a responsive card grid." }, { block: "Mid-day (4 hrs)", task: "Core Java: OOP concepts (classes, objects, encapsulation, inheritance, polymorphism, abstraction, interfaces). Activity: Design a simple class hierarchy (e.g., `Animal` -> `Dog`, `Cat`)." }, { block: "Evening (3 hrs)", task: "SQL: Basic DDL (CREATE TABLE) and DML (INSERT, SELECT, UPDATE, DELETE) statements. Activity: Create a simple `users` table and perform CRUD operations." }, { block: "DSA Revision (1 hr)", task: "DSA: Linked Lists (Singly) - Concepts and basic operations." } ] },
+            { day: 3, phase: 1, title: "Java Collections + JS Intro", tags: ["Java", "JavaScript", "DSA"], schedule: [ { block: "Morning (4 hrs)", task: "Core Java: Collections Framework (ArrayList, LinkedList, HashMap, HashSet), Generics. Activity: Implement a simple phone book using `HashMap`." }, { block: "Mid-day (4 hrs)", task: "JavaScript: Variables (var, let, const), data types, operators, control flow, functions. Activity: Write functions for basic math operations." }, { block: "Evening (3 hrs)", task: "Core Java: Exception Handling. JavaScript: DOM manipulation basics. Activity: Build a simple counter with buttons using JS DOM." }, { block: "DSA Revision (1 hr)", task: "DSA: Stacks & Queues - Concepts and implementation." } ] },
+            { day: 4, phase: 1, title: "Java I/O + JS DOM", tags: ["Java", "JavaScript", "DSA"], schedule: [ { block: "Morning (4 hrs)", task: "Core Java: I/O Streams (File I/O, Serialization). Activity: Read from and write to a text file." }, { block: "Mid-day (4 hrs)", task: "JavaScript: Advanced DOM manipulation, Event Listeners, Event Propagation. Activity: Create a simple to-do list application." }, { block: "Evening (3 hrs)", task: "Core Java: Basic Concurrency. JavaScript: Form validation. Activity: Implement a simple multi-threaded counter." }, { block: "DSA Revision (1 hr)", task: "DSA: Trees (Binary Trees) - Traversal methods." } ] },
+            { day: 5, phase: 1, title: "ES6+ & Advanced SQL", tags: ["JavaScript", "SQL", "DSA"], schedule: [ { block: "Morning (4 hrs)", task: "JavaScript (ES6+): Classes, Modules, Destructuring, Spread/Rest operators, Template Literals. Activity: Refactor previous JS code using ES6 features." }, { block: "Mid-day (4 hrs)", task: "SQL: JOINs, UNION, INTERSECT, EXCEPT. Activity: Practice complex queries involving multiple tables." }, { block: "Evening (3 hrs)", task: "JavaScript: Asynchronous JavaScript (Callbacks, Promises). SQL: Subqueries, CTEs. Activity: Simulate an asynchronous operation with a Promise." }, { block: "DSA Revision (1 hr)", task: "DSA: Binary Search Trees (BST) - Insertion, Deletion, Search." } ] },
+            { day: 6, phase: 1, title: "Async JS & SQL Aggregation", tags: ["JavaScript", "SQL", "DSA"], schedule: [ { block: "Morning (4 hrs)", task: "JavaScript: Async/Await, Error handling. Activity: Fetch data from a public API using `fetch` and `async/await`." }, { block: "Mid-day (4 hrs)", task: "SQL: GROUP BY, HAVING, Aggregate functions. Activity: Analyze sales data using grouping." }, { block: "Evening (3 hrs)", task: "JavaScript: `this` keyword, bind, call, apply. SQL: Window functions (introduction). Activity: Understand `this` context." }, { block: "DSA Revision (1 hr)", task: "DSA: Heaps (Min-Heap, Max-Heap) - Concepts." } ] },
+            { day: 7, phase: 1, title: "Review & Mini-Project", tags: ["HTML", "CSS", "Java", "JavaScript", "SQL", "DSA"], schedule: [ { block: "Morning (6 hrs)", task: "Comprehensive review of all topics from Phase 1. Activity: Go through notes, re-solve challenging problems." }, { block: "Afternoon (6 hrs)", task: "Mini-Project: Build a simple interactive web application using HTML, CSS, and JavaScript. Ideas: Calculator, quiz app, weather app. Focus on applying all learned concepts." }, { block: "DSA Revision (1 hr)", task: "DSA: Graph Traversal (BFS, DFS) - Concepts." } ] },
+            { day: 8, phase: 2, title: "React Basics + JDBC", tags: ["React", "Java", "JDBC", "DSA"], schedule: [ { block: "Morning (4 hrs)", task: "React: What is React? JSX, Components (Functional), Props. Activity: Set up a basic React project, create a simple component." }, { block: "Mid-day (4 hrs)", task: "Advanced Java: JDBC fundamentals (Driver, Connection, Statement, ResultSet). Activity: Write a Java program to connect to a database." }, { block: "Evening (3 hrs)", task: "React: State (useState Hook), Event Handling. Activity: Build a simple counter component with state." }, { block: "DSA Revision (1 hr)", task: "DSA: Sorting Algorithms (Bubble, Selection, Insertion)." } ] },
+            { day: 9, phase: 2, title: "React Hooks + JDBC CRUD", tags: ["React", "Java", "JDBC", "DSA"], schedule: [ { block: "Morning (4 hrs)", task: "React: useEffect Hook, Conditional Rendering. Activity: Fetch data from a dummy API and display it." }, { block: "Mid-day (4 hrs)", task: "Advanced Java: JDBC - Performing CRUD operations using `PreparedStatement`. Activity: Implement a simple `UserDao` class." }, { block: "Evening (3 hrs)", task: "React: Lists & Keys, Forms in React (controlled components). Activity: Create a simple list and a form." }, { block: "DSA Revision (1 hr)", task: "DSA: Sorting Algorithms (Merge Sort, Quick Sort)." } ] },
+            { day: 10, phase: 2, title: "React Styling + JSP/Servlets", tags: ["React", "Java", "JSP", "Servlet", "DSA"], schedule: [ { block: "Morning (4 hrs)", task: "React: Styling in React (CSS Modules, Styled Components - conceptual). Activity: Style your React components." }, { block: "Mid-day (4 hrs)", task: "Advanced Java: Servlets (lifecycle, request/response), basic JSP. Activity: Create a 'Hello World' Servlet and JSP page." }, { block: "Evening (3 hrs)", task: "React: Basic client-side routing (conceptual). Activity: Simulate multiple 'pages' in your React app." }, { block: "DSA Revision (1 hr)", task: "DSA: Searching Algorithms (Linear, Binary Search)." } ] },
+            { day: 11, phase: 2, title: "React Context + JSP/Servlets", tags: ["React", "Java", "JSP", "Servlet", "DSA"], schedule: [ { block: "Morning (4 hrs)", task: "React: Context API for state management. Activity: Share a theme across components using Context." }, { block: "Mid-day (4 hrs)", task: "Advanced Java: JSP & Servlets - Handling form submissions, Request Dispatcher. Activity: Build a simple login form." }, { block: "Evening (3 hrs)", task: "React: Custom Hooks. Advanced Java: Session Management (HttpSession). Activity: Create a custom hook." }, { block: "DSA Revision (1 hr)", task: "DSA: Hash Tables/Maps - Concepts, collision resolution." } ] },
+            { day: 12, phase: 2, title: "React Structure + Hibernate", tags: ["React", "Java", "Hibernate", "DSA"], schedule: [ { block: "Morning (4 hrs)", task: "React: Project structure best practices. Activity: Organize a small React app into logical folders." }, { block: "Mid-day (4 hrs)", task: "Advanced Java: Hibernate - Introduction to ORM, architecture, basic configuration. Activity: Set up a basic Hibernate project." }, { block: "Evening (3 hrs)", task: "React: Higher-Order Components (HOCs). Advanced Java: Hibernate - Mapping entities (annotations). Activity: Define a simple entity." }, { block: "DSA Revision (1 hr)", task: "DSA: Dynamic Programming (Introduction)." } ] },
+            { day: 13, phase: 2, title: "React Advanced + Hibernate CRUD", tags: ["React", "Java", "Hibernate", "DSA"], schedule: [ { block: "Morning (4 hrs)", task: "React: Portals, Error Boundaries, Performance Optimization (memo, useCallback). Activity: Understand when to use these concepts." }, { block: "Mid-day (4 hrs)", task: "Advanced Java: Hibernate - Performing CRUD operations using Session API. Activity: Implement CRUD for your Hibernate entity." }, { block: "Evening (3 hrs)", task: "React: Redux/Zustand (conceptual). Advanced Java: Hibernate - HQL. Activity: Write basic HQL queries." }, { block: "DSA Revision (1 hr)", task: "DSA: Greedy Algorithms - Concepts and simple problems." } ] },
+            { day: 14, phase: 2, title: "Review & React Project", tags: ["React", "Java", "JDBC", "JSP", "Servlet", "Hibernate", "DSA"], schedule: [ { block: "Morning (6 hrs)", task: "Comprehensive review of all topics from Phase 2. Activity: Go through notes, re-solve challenging problems." }, { block: "Afternoon (6 hrs)", task: "Mini-Project: Enhance your previous project or start a new one using React. Ideas: e-commerce listing, blog viewer. Integrate data fetching and state management." }, { block: "DSA Revision (1 hr)", task: "DSA: Bit Manipulation (Basics)." } ] },
+            { day: 15, phase: 3, title: "Spring Boot Intro + Advanced SQL", tags: ["Spring", "SQL", "DSA"], schedule: [ { block: "Morning (4 hrs)", task: "Spring Boot: Introduction, advantages, Spring Initializr, 'Hello World' REST API. Activity: Create a new Spring Boot project." }, { block: "Mid-day (4 hrs)", task: "SQL: Stored Procedures, Functions, Triggers. Activity: Write a simple stored procedure." }, { block: "Evening (3 hrs)", task: "Spring Boot: Dependency Injection, Components, Services, Repositories. Activity: Structure your app with service/repo layers." }, { block: "DSA Revision (1 hr)", task: "DSA: Backtracking - Concepts and simple problems." } ] },
+            { day: 16, phase: 3, title: "Spring REST APIs + SQL Tuning", tags: ["Spring", "SQL", "DSA"], schedule: [ { block: "Morning (4 hrs)", task: "Spring Boot: Building RESTful APIs (GET, POST, PUT, DELETE). Activity: Create a simple REST API for managing users." }, { block: "Mid-day (4 hrs)", task: "SQL: Indexing, Query Optimization (EXPLAIN PLAN). Activity: Understand when and how to create indexes." }, { block: "Evening (3 hrs)", task: "Spring Boot: Request Body, Path Variables, Request Params. SQL: Transactions. Activity: Implement different types of API endpoints." }, { block: "DSA Revision (1 hr)", task: "DSA: Divide and Conquer - Concepts and problems." } ] },
+            { day: 17, phase: 3, title: "Spring Data JPA", tags: ["Spring", "JPA", "DSA"], schedule: [ { block: "Morning (4 hrs)", task: "Spring Boot: Spring Data JPA - Introduction, JPA entities. Activity: Convert your Hibernate entity to a JPA entity." }, { block: "Mid-day (4 hrs)", task: "Spring Boot: Spring Data JPA - `JpaRepository` interface, basic CRUD methods. Activity: Use `JpaRepository` to perform CRUD." }, { block: "Evening (3 hrs)", task: "Spring Boot: Spring Data JPA - Custom queries using method names, `@Query`. Activity: Write custom queries for your repository." }, { block: "DSA Revision (1 hr)", task: "DSA: Tries (Prefix Trees) - Concepts." } ] },
+            { day: 18, phase: 3, title: "Spring Validation & Exceptions", tags: ["Spring", "DSA"], schedule: [ { block: "Morning (4 hrs)", task: "Spring Boot: Data Validation (`@Valid`). Activity: Add validation to your API endpoints." }, { block: "Mid-day (4 hrs)", task: "Spring Boot: Global Exception Handling (`@ControllerAdvice`). Activity: Implement centralized exception handling." }, { block: "Evening (3 hrs)", task: "Spring Boot: Logging (SLF4J, Logback), Profiles. Activity: Add logging to your application." }, { block: "DSA Revision (1 hr)", task: "DSA: Advanced Graph Algorithms (Dijkstra's)." } ] },
+            { day: 19, phase: 3, title: "Spring Security (Basic)", tags: ["Spring", "DSA"], schedule: [ { block: "Morning (4 hrs)", task: "Spring Boot Security: Introduction, basic authentication. Activity: Secure a simple endpoint." }, { block: "Mid-day (4 hrs)", task: "Spring Boot Security: Role-based authorization. Activity: Implement different access levels." }, { block: "Evening (3 hrs)", task: "Spring Boot: Unit Testing (JUnit, Mockito). Activity: Write simple unit tests for your service layer." }, { block: "DSA Revision (1 hr)", task: "DSA: Union-Find (Disjoint Set Union)." } ] },
+            { day: 20, phase: 3, title: "Spring Advanced / Microservices", tags: ["Spring", "DSA"], schedule: [ { block: "Morning (4 hrs)", task: "Spring Boot: Caching (`@Cacheable`), Async methods (`@Async`). Activity: Implement caching." }, { block: "Mid-day (4 hrs)", task: "Spring Boot: Introduction to Microservices concepts. Activity: Understand the benefits and challenges." }, { block: "Evening (3 hrs)", task: "Spring Boot: Actuator for monitoring, Dockerizing (conceptual). Activity: Explore Actuator endpoints." }, { block: "DSA Revision (1 hr)", task: "DSA: Sliding Window Technique." } ] },
+            { day: 21, phase: 3, title: "Review & Full-Stack Project Start", tags: ["Spring", "SQL", "React", "JPA", "DSA"], schedule: [ { block: "Morning (6 hrs)", task: "Comprehensive review of all topics from Phase 3. Activity: Go through notes, re-solve challenging problems." }, { block: "Afternoon (6 hrs)", task: "Mini-Project: Build a full-stack application. Backend: Spring Boot REST API. Frontend: React app consuming your API." }, { block: "DSA Revision (1 hr)", task: "DSA: Two Pointers Technique." } ] },
+            { day: 22, phase: 4, title: "Full-Stack Project - Backend", tags: ["Spring", "JPA", "DSA"], schedule: [ { block: "Full Day (12 hrs)", task: "Continue developing the Spring Boot backend. Focus on: Designing the database schema; Implementing all necessary REST endpoints; Adding validation and exception handling; Ensuring proper service and repository layers." }, { block: "DSA Revision (1 hr)", task: "DSA: Recursion (Advanced) - Memoization." } ] },
+            { day: 23, phase: 4, title: "Full-Stack Project - Frontend", tags: ["React", "DSA"], schedule: [ { block: "Full Day (12 hrs)", task: "Start/Continue developing the React frontend. Focus on: Setting up the project; Creating components; Integrating with your Spring Boot API using `fetch` or Axios; State management and form handling." }, { block: "DSA Revision (1 hr)", task: "DSA: Advanced Dynamic Programming Problems." } ] },
+            { day: 24, phase: 4, title: "Project Integration & Debugging", tags: ["React", "Spring", "DSA"], schedule: [ { block: "Morning (6 hrs)", task: "Integrate the React frontend with the Spring Boot backend. Handle CORS issues. Test all API endpoints from the frontend." }, { block: "Evening (6 hrs)", task: "Debugging and Refinement. Fix bugs, improve UI/UX, refactor code for better readability." }, { block: "DSA Revision (1 hr)", task: "DSA: Review of Trees & Graphs - Solve problems." } ] },
+            { day: 25, phase: 4, title: "Advanced JS/React Concepts", tags: ["JavaScript", "React", "DSA"], schedule: [ { block: "Morning (6 hrs)", task: "Deeper dive into advanced JS/React concepts: Prototypes, closures, event loop; React performance optimization, custom hooks." }, { block: "Evening (6 hrs)", task: "React: State Management Libraries (Redux, Zustand). Activity: Integrate a basic Redux/Zustand store into your project." }, { block: "DSA Revision (1 hr)", task: "DSA: Review of Sorting & Searching - Solve problems." } ] },
+            { day: 26, phase: 4, title: "Advanced Java/Spring Concepts", tags: ["Java", "Spring", "DSA"], schedule: [ { block: "Morning (6 hrs)", task: "Revisit challenging Java/Spring topics: Concurrency, Java 8 Streams API, Spring AOP, Message Queues (conceptual)." }, { block: "Evening (6 hrs)", task: "Design Patterns & Best Practices: Singleton, Factory; REST API design principles, DTOs. Activity: Refactor project to apply a design pattern." }, { block: "DSA Revision (1 hr)", task: "DSA: Review of Linked Lists, Stacks, Queues." } ] },
+            { day: 27, phase: 4, title: "SQL Tuning & Database Design", tags: ["SQL", "DSA"], schedule: [ { block: "Morning (6 hrs)", task: "Advanced SQL: Performance Tuning, analyzing query plans, indexes, normalization trade-offs. Database Design: Normalization forms, ER diagrams." }, { block: "Evening (6 hrs)", task: "SQL: Views, Triggers, Stored Procedures (more complex examples). Activity: Create complex views and triggers for data integrity." }, { block: "DSA Revision (1 hr)", task: "DSA: Review of Arrays & Strings - Solve problems." } ] },
+            { day: 28, phase: 4, title: "Mock Interviews & Problem Solving", tags: ["Java", "JavaScript", "DSA"], schedule: [ { block: "Morning (6 hrs)", task: "Coding Challenges: Solve medium-level problems on LeetCode/HackerRank. Review common algorithms and data structures." }, { block: "Evening (6 hrs)", task: "Mock Interviews: Practice explaining concepts, walking through code, and answering theoretical questions. Review common interview questions." }, { block: "DSA Revision (1 hr)", task: "DSA: Mixed Problem Solving." } ] },
+            { day: 29, phase: 4, title: "Final Project Polish & Docs", tags: ["React", "Spring", "DSA"], schedule: [ { block: "Morning (6 hrs)", task: "Project Refinement: Add final touches to your full-stack project. Testing: Write more comprehensive tests." }, { block: "Evening (6 hrs)", task: "Documentation: Create a `README.md`. Deployment (Conceptual): Research how to deploy your app." }, { block: "DSA Revision (1 hr)", task: "DSA: Final Review of all core concepts." } ] },
+            { day: 30, phase: 4, title: "Grand Review & Future Planning", tags: ["DSA"], schedule: [ { block: "Morning (6 hrs)", task: "Comprehensive Review: Go through all notes, projects, and problems from the entire 30 days. Self-Assessment: Identify strengths and weaknesses." }, { block: "Evening (6 hrs)", task: "Future Learning: Based on your self-assessment, plan your next steps. Networking: Connect with other developers, explore job opportunities." }, { block: "DSA Revision (1 hr)", task: "DSA: Solve a mock interview DSA problem set." } ] }
+        ];
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const planContainer = document.getElementById('plan-container');
+            const filterButtonsContainer = document.getElementById('filter-buttons');
+            let allTags = new Set();
+            studyPlanData.forEach(day => day.tags.forEach(tag => allTags.add(tag)));
+            const sortedTags = [...allTags].sort();
+            
+            const topicHours = { 'HTML/CSS': 0, 'Java': 0, 'JavaScript': 0, 'SQL': 0, 'React': 0, 'Spring': 0, 'JPA/Hibernate': 0, 'DSA': 0, 'Project': 0 };
+            studyPlanData.forEach(day => {
+                let projectTime = 0;
+                day.schedule.forEach(s => {
+                    const hoursMatch = s.block.match(/\((\d+)\s*hrs\)/);
+                    const hours = hoursMatch ? parseInt(hoursMatch[1], 10) : 0;
+                    if (s.task.toLowerCase().includes('project')) projectTime += hours;
+                });
+                if(projectTime > 0) {
+                    topicHours['Project'] += projectTime;
+                } else {
+                    if (day.tags.includes('HTML') || day.tags.includes('CSS')) topicHours['HTML/CSS'] += 4;
+                    if (day.tags.includes('Java')) topicHours['Java'] += 4;
+                    if (day.tags.includes('JavaScript')) topicHours['JavaScript'] += 4;
+                    if (day.tags.includes('SQL')) topicHours['SQL'] += 3;
+                    if (day.tags.includes('React')) topicHours['React'] += 4;
+                    if (day.tags.includes('Spring')) topicHours['Spring'] += 4;
+                    if (day.tags.includes('JPA') || day.tags.includes('Hibernate')) topicHours['JPA/Hibernate'] += 3;
+                }
+                if (day.tags.includes('DSA')) topicHours['DSA'] += 1;
+            });
+            
+            renderFilterButtons(sortedTags);
+            renderPlan(studyPlanData);
+            renderChart(topicHours);
+            setupModal();
+        });
+
+        function renderFilterButtons(tags) {
+            const filterButtonsContainer = document.getElementById('filter-buttons');
+            let buttonsHTML = `<button data-filter="all" class="filter-btn bg-indigo-600 text-white px-4 py-2 rounded-full text-sm font-semibold">All</button>`;
+            tags.forEach(tag => {
+                buttonsHTML += `<button data-filter="${tag}" class="filter-btn bg-stone-200 text-stone-700 px-4 py-2 rounded-full text-sm font-semibold hover:bg-stone-300">${tag}</button>`;
+            });
+            filterButtonsContainer.innerHTML = buttonsHTML;
+
+            document.querySelectorAll('.filter-btn').forEach(button => {
+                button.addEventListener('click', (e) => {
+                    const filter = e.target.dataset.filter;
+                    
+                    document.querySelectorAll('.filter-btn').forEach(btn => {
+                        btn.classList.remove('bg-indigo-600', 'text-white');
+                        btn.classList.add('bg-stone-200', 'text-stone-700');
+                    });
+                    e.target.classList.add('bg-indigo-600', 'text-white');
+                    e.target.classList.remove('bg-stone-200', 'text-stone-700');
+                    
+                    filterPlan(filter);
+                });
+            });
+        }
+        
+        function renderPlan(data) {
+            const planContainer = document.getElementById('plan-container');
+            planContainer.innerHTML = '';
+            let currentPhase = 0;
+            
+            data.forEach(day => {
+                if (day.phase !== currentPhase) {
+                    currentPhase = day.phase;
+                    const phaseTitle = document.createElement('h2');
+                    phaseTitle.className = "text-2xl font-bold text-stone-700 mt-8 mb-4 border-b-2 border-indigo-200 pb-2";
+                    phaseTitle.textContent = `Phase ${currentPhase}: ${getPhaseTitle(currentPhase)}`;
+                    planContainer.appendChild(phaseTitle);
+                    const phaseGrid = document.createElement('div');
+                    phaseGrid.id = `phase-${currentPhase}-grid`;
+                    phaseGrid.className = "grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4";
+                    planContainer.appendChild(phaseGrid);
+                }
+                const phaseGrid = document.getElementById(`phase-${currentPhase}-grid`);
+                const card = document.createElement('div');
+                card.className = "day-card bg-white p-4 rounded-lg shadow-md border-2 border-transparent cursor-pointer";
+                card.dataset.dayId = day.day;
+                card.dataset.tags = day.tags.join(',');
+                card.innerHTML = `
+                    <div class="flex justify-between items-center mb-2">
+                        <span class="text-lg font-bold text-indigo-500">Day ${day.day}</span>
+                        <div class="flex -space-x-2 overflow-hidden">
+                            ${day.tags.slice(0, 3).map(tag => `<span class="inline-block h-6 w-6 rounded-full bg-stone-200 text-stone-600 text-xs flex items-center justify-center font-bold ring-2 ring-white">${tag.substring(0,2)}</span>`).join('')}
+                        </div>
+                    </div>
+                    <p class="text-stone-800 font-semibold text-sm">${day.title}</p>
+                `;
+                phaseGrid.appendChild(card);
+            });
+        }
+        
+        function getPhaseTitle(phase) {
+            switch(phase) {
+                case 1: return "Foundations & JavaScript Kick-off";
+                case 2: return "React Introduction & Advanced Java";
+                case 3: return "Spring Boot & Consolidation";
+                case 4: return "Full-Stack Project & Advanced Topics";
+                default: return "";
+            }
+        }
+
+        function filterPlan(filter) {
+            document.querySelectorAll('.day-card').forEach(card => {
+                const tags = card.dataset.tags.split(',');
+                if (filter === 'all' || tags.includes(filter)) {
+                    card.classList.remove('filtered-out');
+                    if (filter !== 'all') {
+                        card.classList.add('highlight');
+                    } else {
+                        card.classList.remove('highlight');
+                    }
+                } else {
+                    card.classList.add('filtered-out');
+                    card.classList.remove('highlight');
+                }
+            });
+        }
+        
+        function setupModal() {
+            const modal = document.getElementById('day-modal');
+            const closeBtn = document.getElementById('modal-close-btn');
+
+            document.getElementById('plan-container').addEventListener('click', (e) => {
+                const card = e.target.closest('.day-card');
+                if (card && !card.classList.contains('filtered-out')) {
+                    const dayId = parseInt(card.dataset.dayId, 10);
+                    const dayData = studyPlanData.find(d => d.day === dayId);
+                    
+                    document.getElementById('modal-day-number').textContent = `Day ${dayData.day}`;
+                    document.getElementById('modal-day-title').textContent = dayData.title;
+                    
+                    const scheduleContainer = document.getElementById('modal-day-schedule');
+                    scheduleContainer.innerHTML = dayData.schedule.map(item => `
+                        <div class="mb-4">
+                            <h4 class="font-bold text-md text-stone-700">${item.block}</h4>
+                            <p class="text-stone-600 text-sm pl-4 border-l-2 border-indigo-100 py-1">${item.task}</p>
+                        </div>
+                    `).join('');
+                    
+                    modal.classList.remove('hidden');
+                }
+            });
+
+            const closeModal = () => modal.classList.add('hidden');
+            closeBtn.addEventListener('click', closeModal);
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) {
+                    closeModal();
+                }
+            });
+        }
+        
+        function renderChart(data) {
+            const ctx = document.getElementById('topicDistributionChart').getContext('2d');
+            const chartData = {
+                labels: Object.keys(data),
+                datasets: [{
+                    label: 'Hours Allocated',
+                    data: Object.values(data),
+                    backgroundColor: [
+                        '#a5b4fc', '#fca5a5', '#86efac', '#fde047',
+                        '#93c5fd', '#d8b4fe', '#f9a8d4', '#a7f3d0', '#fecaca'
+                    ],
+                    borderColor: '#f8fafc',
+                    borderWidth: 2,
+                    hoverOffset: 8
+                }]
+            };
+            new Chart(ctx, {
+                type: 'doughnut',
+                data: chartData,
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                             labels: {
+                                padding: 15,
+                                font: {
+                                    size: 10
+                                }
+                            }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    let label = context.label || '';
+                                    if (label) {
+                                        label += ': ';
+                                    }
+                                    if (context.parsed !== null) {
+                                        label += context.parsed + ' hrs';
+                                    }
+                                    return label;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+    </script>
+</body>
+</html>
